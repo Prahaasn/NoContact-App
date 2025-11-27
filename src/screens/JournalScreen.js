@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  FlatList,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import colors from '../styles/colors';
 import { getRandomPrompts } from '../data/journalPrompts';
@@ -33,10 +36,6 @@ const JournalScreen = () => {
   const [showViewLetterModal, setShowViewLetterModal] = useState(false);
   const [selectedLetter, setSelectedLetter] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     setPrompts(getRandomPrompts(3));
     const entries = await getJournalEntries();
@@ -45,8 +44,18 @@ const JournalScreen = () => {
     setUnsentLetters(letters.reverse());
   };
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
   const handlePromptSelect = (prompt) => {
-    setSelectedPrompt(prompt);
+    setSelectedPrompt(selectedPrompt?.id === prompt.id ? null : prompt);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -62,6 +71,7 @@ const JournalScreen = () => {
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Saved!', 'Your journal entry has been saved.');
     setJournalText('');
     setSelectedPrompt(null);
     loadData();
@@ -86,7 +96,7 @@ const JournalScreen = () => {
   const handleDeleteLetter = async (id) => {
     Alert.alert(
       'Delete Letter',
-      'Are you sure you want to delete this letter? This cannot be undone.',
+      'Are you sure? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -112,104 +122,162 @@ const JournalScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Journal</Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[colors.primary + '15', colors.background]}
+        style={styles.gradient}
+      />
 
-        {/* Prompts Section */}
-        <Text style={styles.sectionTitle}>Today's Prompts</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {prompts.map((prompt) => (
-            <TouchableOpacity
-              key={prompt.id}
-              style={[
-                styles.promptCard,
-                selectedPrompt?.id === prompt.id && styles.promptCardSelected,
-              ]}
-              onPress={() => handlePromptSelect(prompt)}
-            >
-              <Text style={styles.promptText}>{prompt.prompt}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Journal</Text>
+              <Text style={styles.subtitle}>Your safe space to reflect</Text>
+            </View>
 
-        {/* Journal Entry Input */}
-        <View style={styles.entryContainer}>
-          <Text style={styles.entryLabel}>
-            {selectedPrompt ? selectedPrompt.prompt : 'Free write...'}
-          </Text>
-          <TextInput
-            style={styles.entryInput}
-            placeholder="Start writing..."
-            placeholderTextColor={colors.textMuted}
-            value={journalText}
-            onChangeText={setJournalText}
-            multiline
-            numberOfLines={6}
-          />
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveEntry}>
-            <Text style={styles.saveButtonText}>Save Entry</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Unsent Letters Vault */}
-        <View style={styles.vaultSection}>
-          <View style={styles.vaultHeader}>
-            <Text style={styles.sectionTitle}>Unsent Letters Vault</Text>
-            <TouchableOpacity
-              style={styles.newLetterButton}
-              onPress={() => setShowLetterModal(true)}
-            >
-              <Text style={styles.newLetterText}>+ New</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.vaultDescription}>
-            Write letters you'll never send. Get it all out.
-          </Text>
-
-          {unsentLetters.length === 0 ? (
-            <Text style={styles.emptyText}>No letters yet</Text>
-          ) : (
-            unsentLetters.slice(0, 3).map((letter) => (
-              <TouchableOpacity
-                key={letter.id}
-                style={styles.letterPreview}
-                onPress={() => {
-                  setSelectedLetter(letter);
-                  setShowViewLetterModal(true);
-                }}
-              >
-                <Text style={styles.letterDate}>{formatDate(letter.date)}</Text>
-                <Text style={styles.letterSnippet} numberOfLines={2}>
-                  {letter.content}
-                </Text>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        {/* Recent Entries */}
-        {journalEntries.length > 0 && (
-          <View style={styles.recentSection}>
-            <Text style={styles.sectionTitle}>Recent Entries</Text>
-            {journalEntries.map((entry) => (
-              <View key={entry.id} style={styles.recentEntry}>
-                <Text style={styles.entryDate}>{formatDate(entry.date)}</Text>
-                <Text style={styles.entryPromptLabel}>{entry.prompt}</Text>
-                <Text style={styles.entryContent} numberOfLines={3}>
-                  {entry.content}
-                </Text>
+            {/* Prompts Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionIcon}>💭</Text>
+                <Text style={styles.sectionTitle}>Today's Prompts</Text>
               </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.promptsContainer}
+              >
+                {prompts.map((prompt) => (
+                  <TouchableOpacity
+                    key={prompt.id}
+                    style={[
+                      styles.promptCard,
+                      selectedPrompt?.id === prompt.id && styles.promptCardSelected,
+                    ]}
+                    onPress={() => handlePromptSelect(prompt)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.promptCategory}>{prompt.category}</Text>
+                    <Text style={styles.promptText}>{prompt.prompt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Journal Entry Input */}
+            <View style={styles.entryContainer}>
+              <Text style={styles.entryLabel}>
+                {selectedPrompt ? selectedPrompt.prompt : 'Free write...'}
+              </Text>
+              <TextInput
+                style={styles.entryInput}
+                placeholder="Start writing your thoughts..."
+                placeholderTextColor={colors.textMuted}
+                value={journalText}
+                onChangeText={setJournalText}
+                multiline
+                textAlignVertical="top"
+              />
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveEntry}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.saveButtonGradient}
+                >
+                  <Text style={styles.saveButtonText}>Save Entry</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            {/* Unsent Letters Vault */}
+            <View style={styles.vaultSection}>
+              <View style={styles.vaultHeader}>
+                <View style={styles.vaultTitleRow}>
+                  <Text style={styles.vaultIcon}>📨</Text>
+                  <Text style={styles.sectionTitle}>Unsent Letters Vault</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.newLetterButton}
+                  onPress={() => setShowLetterModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.newLetterText}>+ New</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.vaultDescription}>
+                Write letters you'll never send. Get it all out.
+              </Text>
+
+              {unsentLetters.length === 0 ? (
+                <View style={styles.emptyVault}>
+                  <Text style={styles.emptyIcon}>✉️</Text>
+                  <Text style={styles.emptyText}>No letters yet</Text>
+                  <Text style={styles.emptySubtext}>
+                    Write what you can't say out loud
+                  </Text>
+                </View>
+              ) : (
+                unsentLetters.slice(0, 3).map((letter) => (
+                  <TouchableOpacity
+                    key={letter.id}
+                    style={styles.letterPreview}
+                    onPress={() => {
+                      setSelectedLetter(letter);
+                      setShowViewLetterModal(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.letterMeta}>
+                      <Text style={styles.letterDate}>{formatDate(letter.date)}</Text>
+                      <Text style={styles.letterArrow}>→</Text>
+                    </View>
+                    <Text style={styles.letterSnippet} numberOfLines={2}>
+                      {letter.content}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+
+            {/* Recent Entries */}
+            {journalEntries.length > 0 && (
+              <View style={styles.recentSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionIcon}>📖</Text>
+                  <Text style={styles.sectionTitle}>Recent Entries</Text>
+                </View>
+                {journalEntries.map((entry) => (
+                  <View key={entry.id} style={styles.recentEntry}>
+                    <Text style={styles.entryDate}>{formatDate(entry.date)}</Text>
+                    <Text style={styles.entryPromptLabel}>{entry.prompt}</Text>
+                    <Text style={styles.entryContent} numberOfLines={3}>
+                      {entry.content}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
 
       {/* New Letter Modal */}
       <Modal visible={showLetterModal} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Write an Unsent Letter</Text>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>📝 Write an Unsent Letter</Text>
             <Text style={styles.modalSubtitle}>
               Say everything you need to say. No one will ever see this but you.
             </Text>
@@ -220,6 +288,7 @@ const JournalScreen = () => {
               value={letterText}
               onChangeText={setLetterText}
               multiline
+              textAlignVertical="top"
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -235,7 +304,12 @@ const JournalScreen = () => {
                 style={styles.saveLetterButton}
                 onPress={handleSaveLetter}
               >
-                <Text style={styles.saveLetterText}>Save to Vault</Text>
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.saveLetterGradient}
+                >
+                  <Text style={styles.saveLetterText}>Save to Vault</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
@@ -246,7 +320,8 @@ const JournalScreen = () => {
       <Modal visible={showViewLetterModal} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Unsent Letter</Text>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>📨 Unsent Letter</Text>
             <Text style={styles.letterFullDate}>
               {selectedLetter && formatDate(selectedLetter.date)}
             </Text>
@@ -272,7 +347,7 @@ const JournalScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -281,26 +356,60 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  gradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 200,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
     paddingBottom: 40,
   },
+  header: {
+    marginBottom: 24,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  section: {
     marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionIcon: {
+    fontSize: 20,
+    marginRight: 8,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 12,
+  },
+  promptsContainer: {
+    paddingRight: 20,
   },
   promptCard: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginRight: 12,
     width: 200,
@@ -309,6 +418,15 @@ const styles = StyleSheet.create({
   },
   promptCardSelected: {
     borderColor: colors.primary,
+    backgroundColor: colors.primary + '15',
+  },
+  promptCategory: {
+    fontSize: 11,
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    fontWeight: '600',
   },
   promptText: {
     fontSize: 14,
@@ -316,31 +434,34 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   entryContainer: {
-    marginTop: 24,
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
+    marginBottom: 24,
   },
   entryLabel: {
     fontSize: 14,
     color: colors.primary,
     marginBottom: 12,
+    fontWeight: '500',
   },
   entryInput: {
     backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     color: colors.text,
     fontSize: 16,
-    minHeight: 150,
-    textAlignVertical: 'top',
+    minHeight: 140,
+    lineHeight: 24,
   },
   saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 16,
+  },
+  saveButtonGradient: {
     padding: 14,
     alignItems: 'center',
-    marginTop: 16,
   },
   saveButtonText: {
     color: colors.text,
@@ -348,7 +469,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   vaultSection: {
-    marginTop: 32,
+    marginBottom: 24,
   },
   vaultHeader: {
     flexDirection: 'row',
@@ -356,11 +477,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
+  vaultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vaultIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
   newLetterButton: {
     backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   newLetterText: {
     color: colors.text,
@@ -371,35 +500,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginBottom: 16,
+    marginLeft: 28,
+  },
+  emptyVault: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+    opacity: 0.6,
   },
   emptyText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  emptySubtext: {
     fontSize: 14,
     color: colors.textMuted,
-    fontStyle: 'italic',
+    marginTop: 4,
   },
   letterPreview: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  letterMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   letterDate: {
     fontSize: 12,
     color: colors.primary,
-    marginBottom: 4,
+    fontWeight: '500',
+  },
+  letterArrow: {
+    fontSize: 16,
+    color: colors.textMuted,
   },
   letterSnippet: {
     fontSize: 14,
     color: colors.textSecondary,
+    lineHeight: 20,
   },
   recentSection: {
-    marginTop: 32,
+    marginBottom: 20,
   },
   recentEntry: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   entryDate: {
     fontSize: 12,
@@ -410,6 +567,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: 4,
     marginBottom: 8,
+    fontWeight: '500',
   },
   entryContent: {
     fontSize: 14,
@@ -418,15 +576,24 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 24,
-    maxHeight: '80%',
+    paddingTop: 12,
+    maxHeight: '85%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 22,
@@ -438,41 +605,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginBottom: 20,
+    lineHeight: 20,
   },
   letterInput: {
     backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     color: colors.text,
     fontSize: 16,
     minHeight: 200,
-    textAlignVertical: 'top',
+    lineHeight: 24,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     marginTop: 20,
+    gap: 12,
   },
   cancelButton: {
     flex: 1,
-    padding: 14,
+    padding: 16,
     alignItems: 'center',
-    marginRight: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.textSecondary,
   },
   cancelButtonText: {
     color: colors.textSecondary,
     fontSize: 16,
+    fontWeight: '500',
   },
   saveLetterButton: {
     flex: 1,
-    backgroundColor: colors.primary,
-    padding: 14,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  saveLetterGradient: {
+    padding: 16,
     alignItems: 'center',
-    marginLeft: 10,
-    borderRadius: 10,
   },
   saveLetterText: {
     color: colors.text,
@@ -486,32 +655,32 @@ const styles = StyleSheet.create({
   },
   letterScrollView: {
     maxHeight: 300,
+    marginBottom: 10,
   },
   letterFullContent: {
     fontSize: 16,
     color: colors.text,
-    lineHeight: 24,
+    lineHeight: 26,
   },
   deleteButton: {
     flex: 1,
-    padding: 14,
+    padding: 16,
     alignItems: 'center',
-    marginRight: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.error,
   },
   deleteButtonText: {
     color: colors.error,
     fontSize: 16,
+    fontWeight: '500',
   },
   closeButton: {
     flex: 1,
     backgroundColor: colors.primary,
-    padding: 14,
+    padding: 16,
     alignItems: 'center',
-    marginLeft: 10,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   closeButtonText: {
     color: colors.text,

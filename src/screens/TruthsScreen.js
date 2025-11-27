@@ -6,24 +6,47 @@ import {
   TouchableOpacity,
   Dimensions,
   Share,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import Swiper from 'react-native-deck-swiper';
 import * as Haptics from 'expo-haptics';
 import colors from '../styles/colors';
 import truthReminders from '../data/truthReminders';
 import { saveTruth } from '../utils/storage';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const TruthsScreen = () => {
   const [cards, setCards] = useState([...truthReminders].sort(() => Math.random() - 0.5));
   const [cardIndex, setCardIndex] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
   const swiperRef = useRef(null);
+  const saveAnimation = useRef(new Animated.Value(0)).current;
+
+  const onSwiped = (index) => {
+    setCardIndex(index + 1);
+  };
 
   const onSwipedRight = async (index) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await saveTruth(cards[index]);
+    setSavedCount((prev) => prev + 1);
+
+    // Animate save indicator
+    Animated.sequence([
+      Animated.timing(saveAnimation, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(saveAnimation, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const onSwipedLeft = () => {
@@ -31,121 +54,195 @@ const TruthsScreen = () => {
   };
 
   const onSwipedAll = () => {
-    // Reshuffle cards
     setCards([...truthReminders].sort(() => Math.random() - 0.5));
     setCardIndex(0);
   };
 
   const handleShare = async () => {
     try {
-      const currentCard = cards[cardIndex];
-      await Share.share({
-        message: `"${currentCard.text}" - NoContact App`,
-      });
+      const currentCard = cards[cardIndex % cards.length];
+      if (currentCard) {
+        await Share.share({
+          message: `"${currentCard.text}"\n\n— NoContact App`,
+        });
+      }
     } catch (error) {
       console.log('Error sharing:', error);
     }
   };
 
   const handleSave = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await saveTruth(cards[cardIndex]);
-    swiperRef.current?.swipeRight();
+    const currentCard = cards[cardIndex % cards.length];
+    if (currentCard) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await saveTruth(currentCard);
+      setSavedCount((prev) => prev + 1);
+      swiperRef.current?.swipeRight();
+    }
+  };
+
+  const handleSkip = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    swiperRef.current?.swipeLeft();
   };
 
   const renderCard = (card) => {
     if (!card) return null;
     return (
       <View style={styles.card}>
-        <Text style={styles.cardText}>{card.text}</Text>
-        <Text style={styles.cardCategory}>{card.category}</Text>
+        <LinearGradient
+          colors={[colors.surface, colors.surfaceLight]}
+          style={styles.cardGradient}
+        >
+          <Text style={styles.quoteIcon}>"</Text>
+          <Text style={styles.cardText}>{card.text}</Text>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.cardCategory}>{card.category}</Text>
+          </View>
+        </LinearGradient>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Daily Truths</Text>
-      <Text style={styles.subtitle}>
-        Swipe right to save, left to skip
-      </Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[colors.primary + '20', colors.background]}
+        style={styles.backgroundGradient}
+      />
 
-      <View style={styles.swiperContainer}>
-        <Swiper
-          ref={swiperRef}
-          cards={cards}
-          renderCard={renderCard}
-          onSwipedRight={onSwipedRight}
-          onSwipedLeft={onSwipedLeft}
-          onSwipedAll={onSwipedAll}
-          cardIndex={cardIndex}
-          backgroundColor="transparent"
-          stackSize={3}
-          stackScale={5}
-          stackSeparation={14}
-          animateOverlayLabelsOpacity
-          animateCardOpacity
-          infinite
-          overlayLabels={{
-            left: {
-              title: 'SKIP',
-              style: {
-                label: {
-                  backgroundColor: colors.error,
-                  color: colors.text,
-                  fontSize: 16,
-                  borderRadius: 8,
-                  padding: 10,
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Daily Truths</Text>
+          <Text style={styles.subtitle}>
+            Swipe right to save  •  left to skip
+          </Text>
+          {savedCount > 0 && (
+            <Animated.View
+              style={[
+                styles.savedBadge,
+                {
+                  transform: [
+                    {
+                      scale: saveAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.2],
+                      }),
+                    },
+                  ],
                 },
-                wrapper: {
-                  flexDirection: 'column',
-                  alignItems: 'flex-end',
-                  justifyContent: 'flex-start',
-                  marginTop: 20,
-                  marginLeft: -20,
+              ]}
+            >
+              <Text style={styles.savedBadgeText}>💜 {savedCount} saved</Text>
+            </Animated.View>
+          )}
+        </View>
+
+        {/* Swiper */}
+        <View style={styles.swiperContainer}>
+          <Swiper
+            ref={swiperRef}
+            cards={cards}
+            renderCard={renderCard}
+            onSwiped={onSwiped}
+            onSwipedRight={onSwipedRight}
+            onSwipedLeft={onSwipedLeft}
+            onSwipedAll={onSwipedAll}
+            cardIndex={0}
+            backgroundColor="transparent"
+            stackSize={3}
+            stackScale={8}
+            stackSeparation={12}
+            animateOverlayLabelsOpacity
+            animateCardOpacity
+            disableTopSwipe
+            disableBottomSwipe
+            infinite
+            cardVerticalMargin={40}
+            cardHorizontalMargin={20}
+            overlayLabels={{
+              left: {
+                title: 'SKIP',
+                style: {
+                  label: {
+                    backgroundColor: colors.error,
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    borderRadius: 12,
+                    padding: 12,
+                  },
+                  wrapper: {
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    justifyContent: 'flex-start',
+                    marginTop: 30,
+                    marginLeft: -30,
+                  },
                 },
               },
-            },
-            right: {
-              title: 'SAVE',
-              style: {
-                label: {
-                  backgroundColor: colors.success,
-                  color: colors.text,
-                  fontSize: 16,
-                  borderRadius: 8,
-                  padding: 10,
-                },
-                wrapper: {
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  justifyContent: 'flex-start',
-                  marginTop: 20,
-                  marginLeft: 20,
+              right: {
+                title: '💜 SAVE',
+                style: {
+                  label: {
+                    backgroundColor: colors.success,
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    borderRadius: 12,
+                    padding: 12,
+                  },
+                  wrapper: {
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    justifyContent: 'flex-start',
+                    marginTop: 30,
+                    marginLeft: 30,
+                  },
                 },
               },
-            },
-          }}
-        />
-      </View>
+            }}
+          />
+        </View>
 
-      <View style={styles.buttonsContainer}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => swiperRef.current?.swipeLeft()}
-        >
-          <Text style={styles.skipText}>Skip</Text>
-        </TouchableOpacity>
+        {/* Action Buttons */}
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleSkip}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.buttonInner, styles.skipButtonInner]}>
+              <Text style={styles.buttonEmoji}>✕</Text>
+            </View>
+            <Text style={styles.buttonLabel}>Skip</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Text style={styles.shareText}>Share</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.shareButtonContainer}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.buttonInner, styles.shareButtonInner]}>
+              <Text style={styles.buttonEmoji}>↗</Text>
+            </View>
+            <Text style={styles.buttonLabel}>Share</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveText}>Save</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleSave}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.buttonInner, styles.saveButtonInner]}>
+              <Text style={styles.buttonEmoji}>💜</Text>
+            </View>
+            <Text style={styles.buttonLabel}>Save</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
@@ -154,102 +251,135 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  backgroundGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 300,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: colors.text,
-    textAlign: 'center',
-    marginTop: 20,
   },
   subtitle: {
     fontSize: 14,
     color: colors.textSecondary,
-    textAlign: 'center',
     marginTop: 8,
+  },
+  savedBadge: {
+    backgroundColor: colors.primary + '30',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 12,
+  },
+  savedBadgeText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   swiperContainer: {
     flex: 1,
-    marginTop: -20,
   },
   card: {
-    height: 300,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
+    height: height * 0.45,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  cardGradient: {
+    flex: 1,
     padding: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: colors.surfaceLight,
+  },
+  quoteIcon: {
+    fontSize: 60,
+    color: colors.primary,
+    opacity: 0.3,
+    position: 'absolute',
+    top: 20,
+    left: 25,
   },
   cardText: {
-    fontSize: 22,
+    fontSize: 24,
     color: colors.text,
     textAlign: 'center',
-    lineHeight: 32,
+    lineHeight: 36,
     fontWeight: '500',
+    paddingHorizontal: 10,
+  },
+  categoryBadge: {
+    position: 'absolute',
+    bottom: 24,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   cardCategory: {
     fontSize: 12,
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginTop: 20,
+    fontWeight: '600',
   },
   buttonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: 40,
-    paddingBottom: 30,
+    paddingBottom: 20,
+    gap: 30,
   },
   actionButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  shareButtonContainer: {
+    alignItems: 'center',
+  },
+  buttonInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
+  },
+  skipButtonInner: {
+    backgroundColor: colors.surface,
     borderColor: colors.error,
   },
-  skipText: {
-    color: colors.error,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  shareButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+  shareButtonInner: {
     backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
     borderColor: colors.primary,
   },
-  shareText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  saveButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+  saveButtonInner: {
     backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
     borderColor: colors.success,
   },
-  saveText: {
-    color: colors.success,
-    fontSize: 14,
-    fontWeight: '600',
+  buttonEmoji: {
+    fontSize: 24,
+  },
+  buttonLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: '500',
   },
 });
 
