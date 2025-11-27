@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">No Contact Streak</string>
+    <string name="widget_description">Track your no-contact streak and stay motivated. Displays your current streak in days with an encouraging message.</string>
+</resources>

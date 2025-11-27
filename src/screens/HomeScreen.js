@@ -17,6 +17,7 @@ import { getStreak, hasCheckedInToday, startStreak } from '../utils/storage';
 import { getDailyTruth } from '../data/truthReminders';
 import StreakCounter from '../components/StreakCounter';
 import DayTracker from '../components/DayTracker';
+import { useWidgetUpdate } from '../hooks/useWidgetUpdate';
 
 const { width } = Dimensions.get('window');
 
@@ -26,6 +27,12 @@ const HomeScreen = ({ navigation }) => {
   const [checkedInToday, setCheckedInToday] = useState(false);
   const [dailyTruth, setDailyTruth] = useState(getDailyTruth());
   const fadeAnim = useState(new Animated.Value(0))[0];
+
+  // Widget update hook - automatically updates home screen widgets when streak changes
+  const { updateWidget } = useWidgetUpdate({
+    currentStreak: streak,
+    encouragementMessage: dailyTruth?.text || "You're doing great!",
+  });
 
   const loadData = async () => {
     const currentStreak = await getStreak();
