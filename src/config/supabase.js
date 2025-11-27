@@ -2,16 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Supabase configuration
-// Replace these with your actual Supabase project credentials
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY';
-
-// Validate configuration
-if (supabaseUrl === 'YOUR_SUPABASE_URL' || supabaseAnonKey === 'YOUR_ANON_KEY') {
-  console.warn(
-    'Supabase credentials not configured. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file.'
-  );
-}
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://pwytaswapazwubegfrzz.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3eXRhc3dhcGF6d3ViZWdmcnp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyODMyMjIsImV4cCI6MjA3OTg1OTIyMn0.QftG--7e9BBl-PehlZaoRZqBSjJvs-MnAZ3evdOLDjs';
 
 // Create Supabase client with React Native AsyncStorage
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
