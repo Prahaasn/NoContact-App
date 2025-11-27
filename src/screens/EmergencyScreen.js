@@ -7,27 +7,42 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 import colors from '../styles/colors';
 import { getRandomTruths } from '../data/truthReminders';
+import {
+  logEmergencyEvent,
+  updateEmergencyEvent,
+  resetStreak,
+  startStreak,
+} from '../utils/storage';
 
 const { width } = Dimensions.get('window');
+const TIMER_DURATION = 300; // 5 minutes in seconds
 
 const EmergencyScreen = () => {
+  const navigation = useNavigation();
   const [truths, setTruths] = useState([]);
   const [breathingPhase, setBreathingPhase] = useState('inhale');
   const [breathCount, setBreathCount] = useState(0);
+  const [secondsRemaining, setSecondsRemaining] = useState(TIMER_DURATION);
+  const [timerActive, setTimerActive] = useState(true);
+  const [currentEventId, setCurrentEventId] = useState(null);
+
   const breathAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0.6)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const intervalRef = useRef(null);
+  const timerAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     setTruths(getRandomTruths(5));
     startBreathingAnimation();
+    logEmergencyOnMount();
 
     // Fade in
     Animated.timing(fadeAnim, {
@@ -36,12 +51,36 @@ const EmergencyScreen = () => {
       useNativeDriver: true,
     }).start();
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
+    return () => {};
   }, []);
+
+  // 5-minute countdown timer
+  useEffect(() => {
+    if (!timerActive || secondsRemaining <= 0) {
+      if (secondsRemaining <= 0) {
+        setTimerActive(false);
+        // Pulse animation when timer ends
+        Animated.sequence([
+          Animated.timing(timerAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }),
+          Animated.timing(timerAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start();
+      }
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timerActive, secondsRemaining]);
+
+  const logEmergencyOnMount = async () => {
+    const event = await logEmergencyEvent();
+    if (event) {
+      setCurrentEventId(event.id);
+    }
+  };
 
   const startBreathingAnimation = () => {
     const breathe = () => {
@@ -80,13 +119,86 @@ const EmergencyScreen = () => {
     breathe();
   };
 
-  const handleStayStrong = () => {
+  const handleStayStrong = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Update event as stayed strong
+    if (currentEventId) {
+      await updateEmergencyEvent(currentEventId, true);
+    }
+
+    Alert.alert(
+      "You're Incredible!",
+      "You resisted the urge. That takes real strength. Your future self thanks you.",
+      [
+        {
+          text: 'Write in Journal',
+          onPress: () => navigation.navigate('Journal'),
+        },
+        {
+          text: 'Back to Home',
+          onPress: () => navigation.navigate('Home'),
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleBrokeContact = () => {
+    Alert.alert(
+      'Are you sure?',
+      'Breaking contact will reset your streak. Be honest with yourself - this journey is for you.',
+      [
+        {
+          text: 'No, Stay Strong',
+          onPress: handleStayStrong,
+          style: 'default',
+        },
+        {
+          text: 'Yes, I broke contact',
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+            // Update event as broke contact
+            if (currentEventId) {
+              await updateEmergencyEvent(currentEventId, false);
+            }
+
+            // Reset streak
+            await resetStreak();
+            await startStreak();
+
+            Alert.alert(
+              "It's Okay",
+              "Healing isn't linear. What matters is you're starting again. Every day is a new chance.",
+              [
+                {
+                  text: 'Start Fresh',
+                  onPress: () => navigation.navigate('Home'),
+                },
+              ]
+            );
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
+  const handleGoToJournal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('Journal');
   };
 
   const refreshTruths = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setTruths(getRandomTruths(5));
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -111,6 +223,29 @@ const EmergencyScreen = () => {
                 They're not your person anymore.
               </Text>
             </View>
+
+            {/* Countdown Timer */}
+            {timerActive && (
+              <Animated.View
+                style={[
+                  styles.timerContainer,
+                  { transform: [{ scale: timerAnim }] }
+                ]}
+              >
+                <Text style={styles.timerLabel}>Wait before deciding:</Text>
+                <Text style={styles.timerText}>{formatTime(secondsRemaining)}</Text>
+                <Text style={styles.timerHint}>
+                  Take this time to think clearly
+                </Text>
+              </Animated.View>
+            )}
+
+            {!timerActive && (
+              <View style={styles.timerDoneContainer}>
+                <Text style={styles.timerDoneText}>Time's up - you've waited!</Text>
+                <Text style={styles.timerDoneHint}>You're thinking clearer now</Text>
+              </View>
+            )}
 
             {/* Breathing Exercise */}
             <View style={styles.breathingContainer}>
@@ -157,26 +292,46 @@ const EmergencyScreen = () => {
                 onPress={refreshTruths}
                 activeOpacity={0.7}
               >
-                <Text style={styles.refreshButtonText}>↻ Show More Truths</Text>
+                <Text style={styles.refreshButtonText}>Show More Truths</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Stay Strong Button */}
-            <TouchableOpacity
-              style={styles.stayStrongButton}
-              onPress={handleStayStrong}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={[colors.primary, colors.primaryDark]}
-                style={styles.stayStrongGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+            {/* Action Buttons */}
+            <View style={styles.actionsContainer}>
+              {/* Stay Strong Button */}
+              <TouchableOpacity
+                style={styles.stayStrongButton}
+                onPress={handleStayStrong}
+                activeOpacity={0.8}
               >
-                <Text style={styles.stayStrongEmoji}>💪</Text>
-                <Text style={styles.stayStrongText}>I'm Staying Strong</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.stayStrongGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={styles.stayStrongText}>Stay Strong</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Write in Journal Button */}
+              <TouchableOpacity
+                style={styles.journalButton}
+                onPress={handleGoToJournal}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.journalButtonText}>Write in Journal Instead</Text>
+              </TouchableOpacity>
+
+              {/* I Broke Contact Button */}
+              <TouchableOpacity
+                style={styles.brokeContactButton}
+                onPress={handleBrokeContact}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.brokeContactButtonText}>I broke contact</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Support Message */}
             <View style={styles.supportContainer}>
@@ -246,6 +401,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontWeight: '500',
+  },
+  timerContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+  },
+  timerLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  timerText: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+  timerHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 8,
+  },
+  timerDoneContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: colors.success + '20',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.success + '40',
+  },
+  timerDoneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  timerDoneHint: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
   },
   breathingContainer: {
     alignItems: 'center',
@@ -329,25 +525,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  stayStrongButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
+  actionsContainer: {
     marginTop: 16,
+    gap: 12,
+  },
+  stayStrongButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   stayStrongGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-  },
-  stayStrongEmoji: {
-    fontSize: 24,
-    marginRight: 12,
+    paddingVertical: 18,
   },
   stayStrongText: {
     color: colors.text,
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  journalButton: {
+    backgroundColor: colors.surface,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  journalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  brokeContactButton: {
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  brokeContactButtonText: {
+    fontSize: 14,
+    color: colors.textMuted,
   },
   supportContainer: {
     alignItems: 'center',

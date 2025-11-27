@@ -145,4 +145,25 @@ export const getRandomPrompts = (count = 3) => {
   return shuffled.slice(0, count);
 };
 
+// Prompts specifically for unsent letters
+export const unsentLetterPrompts = [
+  "Write the goodbye you never got to say.",
+  "Tell them everything you wish you could say one last time.",
+  "Write about what you wish had been different.",
+  "Express the anger you've been holding back.",
+  "Write about the moment you knew it was over.",
+  "Tell them how their actions affected you.",
+  "Write what you would say if they asked for you back.",
+  "Describe the person you're becoming without them.",
+  "Write about the future you imagined with them.",
+  "Tell them the truth you were afraid to say.",
+  "Write about what you loved and what you lost.",
+  "Express gratitude for the lessons, even the painful ones.",
+];
+
+// Get random unsent letter prompt
+export const getRandomUnsentLetterPrompt = () => {
+  return unsentLetterPrompts[Math.floor(Math.random() * unsentLetterPrompts.length)];
+};
+
 export default journalPrompts;

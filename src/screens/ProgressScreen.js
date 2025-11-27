@@ -19,6 +19,7 @@ import {
   getRecentCheckIns,
   resetStreak,
   startStreak,
+  getEmergencyStats,
 } from '../utils/storage';
 
 const MILESTONES = [7, 14, 30, 60, 90, 180, 365];
@@ -26,14 +27,17 @@ const MILESTONES = [7, 14, 30, 60, 90, 180, 365];
 const ProgressScreen = () => {
   const [streak, setStreak] = useState(0);
   const [recentCheckIns, setRecentCheckIns] = useState([]);
+  const [emergencyStats, setEmergencyStats] = useState({ total: 0, stayedStrong: 0, brokeContact: 0, successRate: 0 });
   const [refreshing, setRefreshing] = useState(false);
   const progressAnim = useState(new Animated.Value(0))[0];
 
   const loadData = async () => {
     const currentStreak = await getStreak();
     const checkIns = await getRecentCheckIns(7);
+    const emergencyData = await getEmergencyStats();
     setStreak(currentStreak);
     setRecentCheckIns(checkIns);
+    setEmergencyStats(emergencyData);
 
     // Animate progress bar
     Animated.timing(progressAnim, {
@@ -291,6 +295,39 @@ const ProgressScreen = () => {
               })}
             </View>
           </View>
+
+          {/* Emergency Stats */}
+          {emergencyStats.total > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionIcon}>🛡️</Text>
+                <Text style={styles.sectionTitle}>Your Resilience</Text>
+              </View>
+              <View style={styles.emergencyStatsCard}>
+                <View style={styles.emergencyStatRow}>
+                  <View style={styles.emergencyStatItem}>
+                    <Text style={styles.emergencyStatValue}>{emergencyStats.stayedStrong}</Text>
+                    <Text style={styles.emergencyStatLabel}>Stayed Strong</Text>
+                  </View>
+                  <View style={styles.emergencyStatDivider} />
+                  <View style={styles.emergencyStatItem}>
+                    <Text style={styles.emergencyStatValueMuted}>{emergencyStats.brokeContact}</Text>
+                    <Text style={styles.emergencyStatLabel}>Slipped</Text>
+                  </View>
+                </View>
+                {emergencyStats.stayedStrong > 0 && (
+                  <View style={styles.successRateContainer}>
+                    <Text style={styles.successRateText}>
+                      {emergencyStats.successRate}% success rate
+                    </Text>
+                    <Text style={styles.successRateHint}>
+                      You've resisted {emergencyStats.stayedStrong} urge{emergencyStats.stayedStrong > 1 ? 's' : ''}!
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* Motivational Message */}
           <View style={styles.motivationCard}>
@@ -556,6 +593,58 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: 14,
+  },
+  emergencyStatsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 20,
+  },
+  emergencyStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  emergencyStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  emergencyStatValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.success,
+  },
+  emergencyStatValueMuted: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.textMuted,
+  },
+  emergencyStatLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  emergencyStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: colors.surfaceLight,
+  },
+  successRateContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceLight,
+    alignItems: 'center',
+  },
+  successRateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  successRateHint: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
   },
 });
 

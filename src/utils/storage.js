@@ -8,6 +8,7 @@ const KEYS = {
   UNSENT_LETTERS: '@nocontact_unsent_letters',
   SAVED_TRUTHS: '@nocontact_saved_truths',
   SETTINGS: '@nocontact_settings',
+  EMERGENCY_EVENTS: '@nocontact_emergency_events',
 };
 
 // ============ STREAK FUNCTIONS ============
@@ -262,6 +263,79 @@ export const removeSavedTruth = async (id) => {
   }
 };
 
+// ============ EMERGENCY EVENTS FUNCTIONS ============
+
+// Log emergency event (when user feels urge to contact ex)
+export const logEmergencyEvent = async () => {
+  try {
+    const existing = await AsyncStorage.getItem(KEYS.EMERGENCY_EVENTS);
+    const events = existing ? JSON.parse(existing) : [];
+
+    const newEvent = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      stayedStrong: null, // Will be updated when user makes choice
+    };
+
+    events.push(newEvent);
+    await AsyncStorage.setItem(KEYS.EMERGENCY_EVENTS, JSON.stringify(events));
+    return newEvent;
+  } catch (error) {
+    console.error('Error logging emergency event:', error);
+    return null;
+  }
+};
+
+// Update emergency event outcome
+export const updateEmergencyEvent = async (id, stayedStrong) => {
+  try {
+    const existing = await AsyncStorage.getItem(KEYS.EMERGENCY_EVENTS);
+    const events = existing ? JSON.parse(existing) : [];
+
+    const eventIndex = events.findIndex((e) => e.id === id);
+    if (eventIndex !== -1) {
+      events[eventIndex].stayedStrong = stayedStrong;
+      events[eventIndex].resolvedAt = new Date().toISOString();
+      await AsyncStorage.setItem(KEYS.EMERGENCY_EVENTS, JSON.stringify(events));
+    }
+    return true;
+  } catch (error) {
+    console.error('Error updating emergency event:', error);
+    return false;
+  }
+};
+
+// Get all emergency events
+export const getEmergencyEvents = async () => {
+  try {
+    const events = await AsyncStorage.getItem(KEYS.EMERGENCY_EVENTS);
+    return events ? JSON.parse(events) : [];
+  } catch (error) {
+    console.error('Error getting emergency events:', error);
+    return [];
+  }
+};
+
+// Get emergency stats
+export const getEmergencyStats = async () => {
+  try {
+    const events = await getEmergencyEvents();
+    const total = events.length;
+    const stayedStrong = events.filter((e) => e.stayedStrong === true).length;
+    const brokeContact = events.filter((e) => e.stayedStrong === false).length;
+
+    return {
+      total,
+      stayedStrong,
+      brokeContact,
+      successRate: total > 0 ? Math.round((stayedStrong / total) * 100) : 0,
+    };
+  } catch (error) {
+    console.error('Error getting emergency stats:', error);
+    return { total: 0, stayedStrong: 0, brokeContact: 0, successRate: 0 };
+  }
+};
+
 // ============ SETTINGS FUNCTIONS ============
 
 // Get settings
@@ -326,6 +400,10 @@ export default {
   saveTruth,
   getSavedTruths,
   removeSavedTruth,
+  logEmergencyEvent,
+  updateEmergencyEvent,
+  getEmergencyEvents,
+  getEmergencyStats,
   getSettings,
   saveSettings,
   clearAllData,
