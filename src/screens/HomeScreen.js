@@ -13,39 +13,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import colors from '../styles/colors';
-import { getStreak, hasCheckedInToday, startStreak } from '../utils/storage';
-import { getDailyTruth } from '../data/truthReminders';
+import { useStreak } from '../hooks/useStreak';
+import { getDailyTruth, getStreakEncouragement, getRandomEncouragement } from '../data/truthReminders';
 import StreakCounter from '../components/StreakCounter';
 import DayTracker from '../components/DayTracker';
 
 const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
-  const [streak, setStreak] = useState(0);
+  const { streakData, loading, refreshStreak, hasCheckedInToday } = useStreak();
   const [refreshing, setRefreshing] = useState(false);
-  const [checkedInToday, setCheckedInToday] = useState(false);
   const [dailyTruth, setDailyTruth] = useState(getDailyTruth());
+  const [encouragement, setEncouragement] = useState(getRandomEncouragement());
   const fadeAnim = useState(new Animated.Value(0))[0];
 
-  const loadData = async () => {
-    const currentStreak = await getStreak();
-    const checkedIn = await hasCheckedInToday();
-    setStreak(currentStreak);
-    setCheckedInToday(checkedIn);
-    setDailyTruth(getDailyTruth());
-  };
+  const checkedInToday = hasCheckedInToday();
+  const streak = streakData.currentStreak;
 
   useEffect(() => {
-    loadData();
-    const initStreak = async () => {
-      const currentStreak = await getStreak();
-      if (currentStreak === 0) {
-        await startStreak();
-        loadData();
-      }
-    };
-    initStreak();
-
     // Fade in animation
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -57,13 +42,16 @@ const HomeScreen = ({ navigation }) => {
   // Refresh data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [])
+      refreshStreak();
+      setDailyTruth(getDailyTruth());
+    }, [refreshStreak])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await refreshStreak();
+    setDailyTruth(getDailyTruth());
+    setEncouragement(getRandomEncouragement());
     setRefreshing(false);
   };
 
@@ -73,6 +61,18 @@ const HomeScreen = ({ navigation }) => {
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -104,6 +104,11 @@ const HomeScreen = ({ navigation }) => {
             {/* Streak Counter */}
             <View style={styles.streakSection}>
               <StreakCounter streak={streak} />
+              {streakData.totalDays > 0 && (
+                <Text style={styles.totalDaysText}>
+                  Out of {streakData.totalDays} total days
+                </Text>
+              )}
             </View>
 
             {/* Day Tracker */}
@@ -140,6 +145,15 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.checkedInText}>Checked in today</Text>
               </View>
             )}
+
+            {/* Encouragement Card */}
+            <View style={styles.encouragementCard}>
+              <View style={styles.encouragementHeader}>
+                <Text style={styles.encouragementIcon}>🔥</Text>
+                <Text style={styles.encouragementLabel}>Keep it up!</Text>
+              </View>
+              <Text style={styles.encouragementText}>{encouragement}</Text>
+            </View>
 
             {/* Today's Truth Card */}
             <View style={styles.truthCard}>
@@ -235,8 +249,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: 18,
+  },
   streakSection: {
     marginVertical: 20,
+    alignItems: 'center',
+  },
+  totalDaysText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 12,
   },
   checkInPrompt: {
     width: '100%',
@@ -291,12 +320,40 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontWeight: '600',
   },
+  encouragementCard: {
+    backgroundColor: colors.primary + '20',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+  },
+  encouragementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  encouragementIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  encouragementLabel: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  encouragementText: {
+    fontSize: 15,
+    color: colors.text,
+    lineHeight: 22,
+  },
   truthCard: {
     backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 24,
     width: '100%',
-    marginTop: 24,
+    marginTop: 16,
   },
   truthHeader: {
     flexDirection: 'row',

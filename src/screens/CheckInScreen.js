@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import colors from '../styles/colors';
-import { saveCheckIn } from '../utils/storage';
+import { useStreak } from '../hooks/useStreak';
+import { useCheckIn } from '../hooks/useCheckIn';
 import MoodSelector from '../components/MoodSelector';
 
 const TRIGGERS = [
@@ -28,11 +29,29 @@ const TRIGGERS = [
 ];
 
 const CheckInScreen = ({ navigation }) => {
+  const { incrementStreak, hasCheckedInToday } = useStreak();
+  const { todayCheckin, saveCheckin, loading: checkinLoading } = useCheckIn();
+
   const [selectedMood, setSelectedMood] = useState(null);
   const [selectedTriggers, setSelectedTriggers] = useState([]);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const scaleAnim = useState(new Animated.Value(1))[0];
+
+  // Pre-fill form if already checked in today
+  useEffect(() => {
+    if (todayCheckin) {
+      setSelectedMood(todayCheckin.mood);
+      // Map trigger labels back to ids
+      if (todayCheckin.triggers) {
+        const triggerIds = todayCheckin.triggers
+          .map(label => TRIGGERS.find(t => t.label === label)?.id)
+          .filter(Boolean);
+        setSelectedTriggers(triggerIds);
+      }
+      setNote(todayCheckin.notes || todayCheckin.note || '');
+    }
+  }, [todayCheckin]);
 
   const handleMoodSelect = (mood) => {
     setSelectedMood(mood);
@@ -73,26 +92,56 @@ const CheckInScreen = ({ navigation }) => {
         (id) => TRIGGERS.find((t) => t.id === id)?.label
       ).filter(Boolean);
 
-      await saveCheckIn({
-        mood: selectedMood,
-        triggers: triggerLabels,
-        note: note.trim(),
-      });
+      // Save check-in using the hook
+      const checkinResult = await saveCheckin(selectedMood, triggerLabels, note.trim());
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (checkinResult.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      Alert.alert(
-        'Check-in Complete ✓',
-        'Great job taking care of yourself today. Keep going!',
-        [
-          {
-            text: 'Done',
-            onPress: () => {
-              navigation.navigate('Home');
-            },
-          },
-        ]
-      );
+        // Increment streak if this is first check-in today
+        if (checkinResult.isNewCheckin) {
+          const streakResult = await incrementStreak();
+
+          if (streakResult.success) {
+            Alert.alert(
+              'Great job! 🎉',
+              `You've checked in! Your streak is now ${streakResult.newStreak} day${streakResult.newStreak !== 1 ? 's' : ''}.`,
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.navigate('Home'),
+                },
+              ]
+            );
+          } else {
+            // Streak already counted or couldn't increment
+            Alert.alert(
+              'Check-in Complete ✓',
+              'Great job taking care of yourself today. Keep going!',
+              [
+                {
+                  text: 'Done',
+                  onPress: () => navigation.navigate('Home'),
+                },
+              ]
+            );
+          }
+        } else {
+          // Updating existing check-in
+          Alert.alert(
+            'Check-in Updated ✓',
+            'Your check-in has been updated.',
+            [
+              {
+                text: 'Done',
+                onPress: () => navigation.navigate('Home'),
+              },
+            ]
+          );
+        }
+      } else {
+        throw new Error('Failed to save check-in');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to save check-in. Please try again.');
     } finally {
@@ -210,7 +259,12 @@ const CheckInScreen = ({ navigation }) => {
                   end={{ x: 1, y: 1 }}
                 >
                   <Text style={styles.saveButtonText}>
-                    {saving ? 'Saving...' : 'Complete Check-In'}
+                    {saving
+                      ? 'Saving...'
+                      : todayCheckin
+                        ? 'Update Check-In'
+                        : 'Complete Check-In'
+                    }
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>

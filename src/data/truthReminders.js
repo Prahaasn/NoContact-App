@@ -195,4 +195,45 @@ export const getRandomTruths = (count = 5) => {
   return shuffled.slice(0, count);
 };
 
+// Encouragement messages for the home screen
+export const encouragementMessages = [
+  "You're on fire this week! Keep that momentum going.",
+  "Every day you stay strong, you're building a better future.",
+  "Your strength is inspiring. One day at a time.",
+  "You've got this! Each day is a victory.",
+  "Look how far you've come. Be proud of yourself.",
+  "Healing takes courage, and you have plenty of it.",
+  "Your future self is thanking you right now.",
+  "You're doing something incredibly hard, and you're succeeding.",
+  "This streak represents your commitment to yourself.",
+  "Every day of no contact is an act of self-love.",
+  "You're breaking old patterns and creating new ones.",
+  "Trust the process. You're exactly where you need to be.",
+  "Your peace of mind is worth protecting.",
+  "You're not just surviving, you're thriving.",
+  "Keep going - the best is yet to come.",
+  "You're stronger than you realize.",
+  "This journey is proof of your resilience.",
+  "Celebrate every single day of progress.",
+  "You're choosing yourself, and that's beautiful.",
+  "The hardest part is behind you. Keep moving forward.",
+];
+
+// Get random encouragement message
+export const getRandomEncouragement = () => {
+  return encouragementMessages[Math.floor(Math.random() * encouragementMessages.length)];
+};
+
+// Get encouragement based on streak
+export const getStreakEncouragement = (streak) => {
+  if (streak === 0) return "Today is the perfect day to start fresh.";
+  if (streak === 1) return "Day one - the hardest step is already done!";
+  if (streak < 7) return "You're building momentum. Keep it up!";
+  if (streak < 14) return "A whole week strong! You're incredible!";
+  if (streak < 30) return "Two weeks of strength! You're unstoppable!";
+  if (streak < 60) return "A month of healing! You should be so proud!";
+  if (streak < 90) return "Two months! You're transforming your life!";
+  return "90+ days! You've proven you can do anything!";
+};
+
 export default truthReminders;
